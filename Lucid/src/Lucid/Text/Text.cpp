@@ -1,6 +1,6 @@
 #include "Text.hpp"
 
-#define STB_TRUETYPE_IMPLEMENTATION 
+#define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.h>
 
 namespace Lucid {
@@ -18,52 +18,33 @@ namespace Lucid {
 		int encodingID = 0;
 		int languageID = 0;
 #endif
-        
-        const char* vertexCode = """#version 330 core layout(location = 0) in vec3 aPos;     // Vertex position (quad) layout(location = 1) in vec2 aTex; out vec2 TexCoord; uniform mat4 projection; void main() { gl_Position = projection * vec4(aPos, 1.0); TexCoord = aTex; }""";
-        const char* fragmentCode = """#version 330 core in vec2 TexCoord; out vec4 FragColor;  uniform sampler2D text; uniform vec3 textColor; // RGB void main() { float alpha = texture(text, TexCoord).r; FragColor = vec4(textColor, alpha); FragColor=vec4(1.0); }""";
 
 		std::unordered_map<std::string, Font> fonts;
-		std::unordered_map<char, Glyph> glyphs;
+		std::unordered_map<std::string, std::unordered_map<float, std::unordered_map<char, Glyph>>> glyphs;
+
+        std::string activeFont;
+
         unsigned int VAO, VBO;
-        unsigned int shaderProgram;
+        Shader shader;
 
-        void Init() {
-            float quad[6][4] = {}; // will be overwritten
-            glGenBuffers(1, &VBO);
-            glBindBuffer(GL_ARRAY_BUFFER, VBO);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(quad), nullptr, GL_DYNAMIC_DRAW);
-
+        void Init(const std::string& currentPath) {
             glGenVertexArrays(1, &VAO);
+            glGenBuffers(1, &VBO);
             glBindVertexArray(VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, VBO);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
             glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-
-            // 2. compile shaders
-            unsigned int vertex, fragment;
-            // vertex shader
-            vertex = glCreateShader(GL_VERTEX_SHADER);
-            glShaderSource(vertex, 1, &vertexCode, NULL);
-            glCompileShader(vertex);
-            // fragment Shader
-            fragment = glCreateShader(GL_FRAGMENT_SHADER);
-            glShaderSource(fragment, 1, &fragmentCode, NULL);
-            glCompileShader(fragment);
-            // shader Program
-            shaderProgram = glCreateProgram();
-            glAttachShader(shaderProgram, vertex);
-            glAttachShader(shaderProgram, fragment);
-            glLinkProgram(shaderProgram);
-            // delete the shaders as they're linked into our program now and no longer necessary
-            glDeleteShader(vertex);
-            glDeleteShader(fragment);
+            glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
 
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            shader = Shader(currentPath + "Text\\Shader\\Text.vert", currentPath + "Text\\Shader\\Text.frag");
         }
 
-        void LoadFont(const std::string& fontPath) {
+        void LoadFont(const std::string& fontPath, bool setActive) {
             // Read font into vector (RAII safe)
             std::ifstream file(fontPath, std::ios::binary | std::ios::ate);
             if (!file) throw std::runtime_error("Failed to open font file");
@@ -87,86 +68,123 @@ namespace Lucid {
 
             fonts[fontName] = std::move(font);
 
-            GenerateGlyphs(fonts[fontName]);
+            if (setActive) setActiveFont(fontName);
         }
 
-        void GenerateGlyphs(const Font& font, float scale, float fontSize)
-        {
+        void GenerateGlyphs(const std::string& fontName, float fontSize) {
+            if (glyphs.count(fontName)) {
+                if (glyphs[fontName].count(fontSize)) return; // Avoid regenerating
+            } else throw std::runtime_error("Font not loaded");
+
+            Font& font = fonts[fontName];
+
+            float scale = stbtt_ScaleForPixelHeight(&font.info, fontSize);
+            std::unordered_map<char, Glyph> sizeGlyphs;
+
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
             for (char c = 32; c < 127; ++c) {
                 int width, height, xoff, yoff;
-                unsigned char* bitmap = stbtt_GetCodepointBitmap(
-                    &font.info, 0, stbtt_ScaleForPixelHeight(&font.info, fontSize),
-                    c, &width, &height, &xoff, &yoff
-                );
+                unsigned char* bitmap = stbtt_GetCodepointBitmap(&font.info, 0, scale, c, &width, &height, &xoff, &yoff);
 
-                // Generate OpenGL texture
                 GLuint texID;
                 glGenTextures(1, &texID);
                 glBindTexture(GL_TEXTURE_2D, texID);
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-                int advance, lsb;
-                stbtt_GetCodepointHMetrics(&font.info, c, &advance, &lsb);
+                int advance;
+                stbtt_GetCodepointHMetrics(&font.info, c, &advance, nullptr);
 
-                Glyph glyph = {
+                int x0, y0, x1, y1;
+                stbtt_GetCodepointBitmapBox(&font.info, c, scale, scale, &x0, &y0, &x1, &y1);
+
+                sizeGlyphs[c] = {
                     texID,
                     width,
                     height,
-                    xoff,
-                    yoff,
-                    static_cast<int>(advance * scale)
+                    x0,
+                    -y0,
+                    advance
                 };
-
-                glyphs[c] = glyph;
 
                 stbtt_FreeBitmap(bitmap, nullptr);
             }
 
+            glyphs[fontName][fontSize] = std::move(sizeGlyphs);
         }
 
-        void RenderText(const std::string& text, float windowWidth, float windowHeight, float x, float y, float scale, float r, float g, float b, float a) {
-            for (char c : text) {
-                Glyph& glyph = glyphs[c];
-
-                float xpos = x + glyph.bearingX * scale;
-                float ypos = y - glyph.bearingY * scale;
-                float w = glyph.width * scale;
-                float h = glyph.height * scale;
-
-                float vertices[6][4] = {
-    { xpos,     ypos + h,   0.0f, 0.0f },
-    { xpos,     ypos,       0.0f, 1.0f },
-    { xpos + w, ypos,       1.0f, 1.0f },
-
-    { xpos,     ypos + h,   0.0f, 0.0f },
-    { xpos + w, ypos,       1.0f, 1.0f },
-    { xpos + w, ypos + h,   1.0f, 0.0f }
-                };
-
-                glBindTexture(GL_TEXTURE_2D, glyph.textureID);
-
-                // Update VBO
-                glBindVertexArray(VAO);
-                glBindBuffer(GL_ARRAY_BUFFER, VBO);
-                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-
-                // Draw textured quad at (xpos, ypos) of size (w, h)
-                // Using your quad VAO and g.textureID
-                glUseProgram(shaderProgram);
-                glUniform3f(glGetUniformLocation(shaderProgram, "textColor"), r, g, b);
-                glActiveTexture(GL_TEXTURE0);
-                glUniform1i(glGetUniformLocation(shaderProgram, "text"), 0);
-
-                glm::mat4 projection = glm::ortho(0.0f, windowWidth * 1.0f, 0.0f, windowHeight * 1.0f);
-                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
-                // Draw
-                glDrawArrays(GL_TRIANGLES, 0, 6);
-
-                x += glyph.advance * scale;
+        void setActiveFont(const std::string& fontName)
+        {
+            if (fonts.count(fontName) > 0) {
+                activeFont = fontName;
             }
+            else throw std::runtime_error("Font not loaded");
+        }
+
+        void RenderText(const std::string& text, glm::vec2 windowSize, glm::vec2 position, float fontSize, glm::vec4 color) {
+            shader.use();
+            shader.setMat4("projection", glm::ortho(0.0f, windowSize.x, 0.0f, windowSize.y));
+            shader.setVec3("textColor", color);
+            glActiveTexture(GL_TEXTURE0);
+            glBindVertexArray(VAO);
+
+            if (glyphs[activeFont].count(fontSize) == 0) GenerateGlyphs(activeFont, fontSize);
+            auto& glyphMap = glyphs[activeFont][fontSize];
+
+            float scale = stbtt_ScaleForPixelHeight(&fonts[activeFont].info, fontSize);
+
+            // iterate through all characters
+            std::string::const_iterator c;
+            for (c = text.begin(); c != text.end(); c++)
+            {
+                Glyph ch = glyphMap[*c];
+
+                float xpos = position.x + ch.bearingX;
+                float ypos = position.y - (ch.height - ch.bearingY);
+
+                float w = ch.width;
+                float h = ch.height;
+                // update VBO for each character
+                float vertices[6][4] = {
+                    { xpos,     ypos + h,   0.0f, 0.0f },
+                    { xpos,     ypos,       0.0f, 1.0f },
+                    { xpos + w, ypos,       1.0f, 1.0f },
+
+                    { xpos,     ypos + h,   0.0f, 0.0f },
+                    { xpos + w, ypos,       1.0f, 1.0f },
+                    { xpos + w, ypos + h,   1.0f, 0.0f }
+                };
+                // render glyph texture over quad
+                glBindTexture(GL_TEXTURE_2D, ch.textureID);
+                // update content of VBO memory
+                glBindBuffer(GL_ARRAY_BUFFER, VBO);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // be sure to use glBufferSubData and not glBufferData
+
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+                // render quad
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+                // now advance cursors for next glyph
+                position.x += ch.advance * scale;
+            }
+            glBindVertexArray(0);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
+        float MeasureTextWidth(const std::string& text, const std::string& fontName, float fontSize) {
+            float scale = stbtt_ScaleForPixelHeight(&fonts[fontName].info, fontSize);
+
+            if (glyphs[fontName].count(fontSize) == 0)
+                GenerateGlyphs(fontName, fontSize);
+
+            float width = 0.0f;
+            for (char c : text) {
+                width += (glyphs[fontName][fontSize][c].advance >> 6) * scale;
+            }
+            return width;
         }
 	}
 }

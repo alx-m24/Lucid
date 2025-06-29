@@ -9,8 +9,6 @@ int main() {
 
 	while (!Lucid::WindowShouldClose()) {
 		Lucid::Update();
-
-		//std::cout << test << std::endl;
 	}
 
 	Lucid::Terminate();

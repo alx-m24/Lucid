@@ -39,8 +39,9 @@ namespace Lucid {
 
 		currentPath = fs::current_path().string() + "\\src\\Lucid\\";
 
-		Text::Init();
-		Text::LoadFont(currentPath + "\\Fonts\\arial.ttf");
+		Text::Init(currentPath);
+		Text::LoadFont(currentPath + "Fonts\\arial.ttf");
+		Text::LoadFont(currentPath + "Fonts\\BRADHITC.ttf");
 
 		RequestReDraw();
 	}
@@ -62,7 +63,7 @@ namespace Lucid {
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		Text::RenderText(*boundTextInputs["test"], SCR_WIDTH, SCR_HEIGHT, 0.5f, 0.5f, 1.0f / 17.0f);
+		Text::RenderText(*boundTextInputs["test"], { SCR_WIDTH, SCR_HEIGHT }, { 50.0f, 500.0f }, 32.0f, {1.0f, 1.0f, 1.0f, 1.0f});
 
 		glfwSwapBuffers(window);
 	}

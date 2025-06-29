@@ -12,9 +12,12 @@
 #include <iostream>
 #include <unordered_map>
 
+#include "Shader/Shader.hpp"
+
 namespace Lucid {
 	namespace Text {
 		struct Font {
+			std::string name;
 			std::vector<unsigned char> data;
 			stbtt_fontinfo info;
 		};
@@ -26,10 +29,12 @@ namespace Lucid {
 			int advance;
 		};
 
-		void Init();
+		void Init(const std::string& currentPath);
 
-		void LoadFont(const std::string& fontPath);
-		void GenerateGlyphs(const Font& font, float scale = 1.0f, float fontSize = 32.0f);
-		void RenderText(const std::string& text, float windowWidth, float windowHeight, float x, float y, float scale, float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f);
+		void LoadFont(const std::string& fontPath, bool setActive = true);
+		void setActiveFont(const std::string& fontName);
+		void GenerateGlyphs(const std::string& fontName, float fontSize = 32.0f);
+		void RenderText(const std::string& text, glm::vec2 windowSize, glm::vec2 position, float fontSize, glm::vec4 color);
+		float MeasureTextWidth(const std::string& text, const std::string& fontName, float fontSize);
 	}
 }

@@ -27,6 +27,9 @@
     <ClCompile Include="src\Lucid\Text\Text.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\Lucid\Text\Shader\Shader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Lucid\gui.hpp">
@@ -35,5 +38,16 @@
     <ClInclude Include="src\Lucid\Text\Text.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\Lucid\Text\Shader\Shader.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\Lucid\Text\Shader\Text.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="src\Lucid\Text\Shader\Text.vert">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

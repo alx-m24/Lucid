@@ -21,11 +21,17 @@
   <ItemGroup>
     <ClCompile Include="src\demo.cpp" />
     <ClCompile Include="src\Lucid\gui.cpp" />
+    <ClCompile Include="src\Lucid\Text\Shader\Shader.cpp" />
     <ClCompile Include="src\Lucid\Text\Text.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Lucid\gui.hpp" />
+    <ClInclude Include="src\Lucid\Text\Shader\Shader.hpp" />
     <ClInclude Include="src\Lucid\Text\Text.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\Lucid\Text\Shader\Text.frag" />
+    <None Include="src\Lucid\Text\Shader\Text.vert" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
