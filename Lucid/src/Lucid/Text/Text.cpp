@@ -44,7 +44,7 @@ namespace Lucid {
             shader = Shader(currentPath + "Text\\Shader\\Text.vert", currentPath + "Text\\Shader\\Text.frag");
         }
 
-        void LoadFont(const std::string& fontPath, bool setActive) {
+        void LoadFont(const std::string& fontName, const std::string& fontPath, bool setActive) {
             // Read font into vector (RAII safe)
             std::ifstream file(fontPath, std::ios::binary | std::ios::ate);
             if (!file) throw std::runtime_error("Failed to open font file");
@@ -60,11 +60,6 @@ namespace Lucid {
             if (!stbtt_InitFont(&font.info, font.data.data(), stbtt_GetFontOffsetForIndex(font.data.data(), 0))) {
                 throw std::runtime_error("Failed to initialize font");
             }
-
-            int length = 0;
-            const char* rawName = stbtt_GetFontNameString(&font.info, &length, platformID, encodingID, languageID, 4);
-
-            std::string fontName = rawName && length > 0 ? std::string(rawName, length) : "UnnamedFont";
 
             fonts[fontName] = std::move(font);
 
@@ -144,7 +139,7 @@ namespace Lucid {
                 Glyph ch = glyphMap[*c];
 
                 float xpos = position.x + ch.bearingX;
-                float ypos = position.y - (ch.height - ch.bearingY);
+                float ypos = windowSize.y - position.y - (ch.height - ch.bearingY);
 
                 float w = ch.width;
                 float h = ch.height;

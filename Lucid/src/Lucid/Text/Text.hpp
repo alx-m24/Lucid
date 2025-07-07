@@ -31,7 +31,7 @@ namespace Lucid {
 
 		void Init(const std::string& currentPath);
 
-		void LoadFont(const std::string& fontPath, bool setActive = true);
+		void LoadFont(const std::string& fontName, const std::string& fontPath, bool setActive = true);
 		void setActiveFont(const std::string& fontName);
 		void GenerateGlyphs(const std::string& fontName, float fontSize = 32.0f);
 		void RenderText(const std::string& text, glm::vec2 windowSize, glm::vec2 position, float fontSize, glm::vec4 color);

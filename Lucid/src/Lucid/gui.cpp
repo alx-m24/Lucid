@@ -8,11 +8,12 @@ namespace Lucid {
 
 	bool ShouldRedraw;
 	unsigned int SCR_WIDTH = 1000;
-	unsigned int SCR_HEIGHT = 800;
+	unsigned int SCR_HEIGHT = 600;
 
 	std::string currentFocusInputID;
 	std::unordered_map<std::string, std::string*> boundTextInputs;
-
+	std::stack<Div> displayStack;
+	std::vector<TextElement> textElements;
 
 	void Init(const std::string title) {
 		glfwInit();
@@ -34,16 +35,26 @@ namespace Lucid {
 		if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 		{
 			std::cerr << "Failed to initialize GLAD" << std::endl;
+			Terminate();
 			return;
 		}
 
 		currentPath = fs::current_path().string() + "\\src\\Lucid\\";
 
-		Text::Init(currentPath);
-		Text::LoadFont(currentPath + "Fonts\\arial.ttf");
-		Text::LoadFont(currentPath + "Fonts\\BRADHITC.ttf");
+		try {
+			Text::Init(currentPath);
+			Text::LoadFont("Arial", currentPath + "Fonts\\arial.ttf");
+			Text::LoadFont("BRADHITC", currentPath + "Fonts\\BRADHITC.ttf", false);
+		}
+		catch (const std::exception& ex) {
+			std::cout << "\nFailed to init text: " << ex.what() << std::endl;
+			Terminate();
+			return;
+		}
 
 		RequestReDraw();
+
+		LoadPage(fs::current_path().string() + "\\src\\demo.html", fs::current_path().string() + "\\src\\demo.css");
 	}
 
 	void Update()
@@ -56,6 +67,49 @@ namespace Lucid {
 			Draw();
 			ShouldRedraw = false;
 		}
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+	void LoadPage(const std::string& htmlPath, std::string CSSPath)
+	{
+		LoadPage(Parse(htmlPath, CSSPath));
+	}
+
+	void LoadPage(const std::shared_ptr<HTMLElement>& node)
+	{
+		if (!node) return;
+
+		std::cout << "<" << node->tagName << ", Id: '" << node->attributes.Id << "', Class: '" << node->attributes.Class << "'>";
+		if (!node->content.empty())
+			std::cout << " " << node->content;
+		std::cout << std::endl;
+
+		if (node->tagName == "div") {
+			Div div;
+			div.position = node->properties.position;
+			div.size = {};
+			displayStack.push(div);
+		}
+		else if (node->tagName == "p") {
+			TextElement& text = textElements.emplace_back();
+			text.position = node->properties.position + glm::vec2(0.0f, node->properties.fontSize) + (displayStack.empty() ? glm::vec2(0.0f) : displayStack.top().position);
+			text.text = node->content;
+			text.color = node->properties.color;
+			text.fontSize = node->properties.fontSize;
+			text.font = node->properties.fontfamily;
+		}
+
+		// Recursively print children
+		for (const auto& child : node->children) {
+			LoadPage(child);
+		}
+
+		if (node->tagName == "div") {
+			if (!displayStack.empty()) displayStack.pop();
+		}
+
+		RequestReDraw();
 	}
 
 	void Draw()
@@ -63,7 +117,13 @@ namespace Lucid {
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		Text::RenderText(*boundTextInputs["test"], { SCR_WIDTH, SCR_HEIGHT }, { 50.0f, 500.0f }, 32.0f, {1.0f, 1.0f, 1.0f, 1.0f});
+		for (const TextElement text : textElements) {
+			Text::setActiveFont(text.font);
+			Text::RenderText(text.text, { SCR_WIDTH, SCR_HEIGHT }, text.position, text.fontSize, text.color);
+		}
+
+		Text::setActiveFont("BRADHITC");
+		Text::RenderText(*boundTextInputs["test"], { SCR_WIDTH, SCR_HEIGHT }, { 50.0f, 500.0f }, boundTextInputs["test"]->length(), {1.0f, 1.0f, 1.0f, 1.0f});
 
 		glfwSwapBuffers(window);
 	}
@@ -115,6 +175,12 @@ namespace Lucid {
 			if (!str->empty()) {
 				str->pop_back();
 			}
+		}
+		if (key == GLFW_KEY_TAB && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+			*boundTextInputs[currentFocusInputID] += "    ";
+		}
+		if (key == GLFW_KEY_LEFT_SHIFT && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+			Text::setActiveFont("Arial");
 		}
 	}
 }

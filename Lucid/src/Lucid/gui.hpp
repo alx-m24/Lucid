@@ -9,13 +9,19 @@
 #include <type_traits>
 #include <unordered_map>
 
+#include "Elements.hpp"
 #include "Text/Text.hpp"
+#include "Parser/Parser.hpp"
 
 namespace Lucid {
 	extern std::unordered_map<std::string, std::string*> boundTextInputs;
 
+	using namespace Parser;
+
 	void Init(const std::string title);
 	void Update();
+	void LoadPage(const std::string& htmlPath, std::string CSSPath = "");
+	void LoadPage(const std::shared_ptr<HTMLElement>& node);
 	void Draw();
 	void RequestReDraw();
 	void Terminate();
